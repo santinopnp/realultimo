@@ -1,0 +1,5 @@
+fastapi
+httpx
+uvicorn
+fastapi-utils
+typing_inspect
