@@ -1,3 +1,23 @@
+from fastapi import FastAPI, Request, status
+import httpx
+import os
+from datetime import datetime, timedelta
+
+app = FastAPI()  # CREA LA APP ANTES DE LOS DECORADORES
+
+# --- El resto de tu código va después ---
+TELEGRAM_BOT_TOKEN = "7899263814:AAFfIAxbqwscUUZgEgXcPLCfcH9g53dtpoE"
+CHANNELS_AND_GROUPS = [
+    -1002201821366,
+    -1002258831170,
+    -1001834990266
+]
+user_memberships = {}
+
+@app.get("/")
+async def root():
+    return {"status": "ok"}
+
 @app.post("/webhook")
 async def bold_webhook(request: Request):
     data = await request.json()
@@ -27,3 +47,35 @@ async def bold_webhook(request: Request):
         await add_user_to_chat(telegram_user_id, chat_id)
     print(f"Usuario {telegram_user_id} agregado a grupos hasta {expires_at}")
     return {"status": "usuario registrado y añadido a canales"}, 200
+
+async def add_user_to_chat(user_id, chat_id):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/unbanChatMember"
+    payload = {"chat_id": chat_id, "user_id": user_id}
+    async with httpx.AsyncClient() as client:
+        r = await client.post(url, data=payload)
+        print(f"Intento de agregar a {user_id} en {chat_id}: {r.status_code}, {r.text}")
+
+from fastapi_utils.tasks import repeat_every
+
+@app.on_event("startup")
+@repeat_every(seconds=60 * 60 * 24)
+async def check_expired_memberships():
+    print("Verificando membresías expiradas...")
+    now = datetime.now()
+    to_remove = [uid for uid, info in user_memberships.items() if info["expires_at"] < now]
+    for user_id in to_remove:
+        for chat_id in CHANNELS_AND_GROUPS:
+            await remove_user_from_chat(user_id, chat_id)
+        print(f"Usuario {user_id} removido de todos los canales por expiración.")
+        del user_memberships[user_id]
+
+async def remove_user_from_chat(user_id, chat_id):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/kickChatMember"
+    payload = {"chat_id": chat_id, "user_id": user_id}
+    async with httpx.AsyncClient() as client:
+        r = await client.post(url, data=payload)
+        print(f"Kick: {r.status_code}, {r.text}")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
