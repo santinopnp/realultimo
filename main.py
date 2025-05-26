@@ -51,3 +51,6 @@ async def remove_user_from_chat(user_id, chat_id):
     async with httpx.AsyncClient() as client:
         r = await client.post(url, json=payload)
         print("Kick:", r.status_code, r.text)
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
